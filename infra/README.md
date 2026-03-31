@@ -4,9 +4,75 @@
 
 ## Architecture Overview
 
-![Architecture](architecture-diagram.drawio)
+> 📐 ไฟล์ Draw.io อยู่ที่ [`architecture-diagram.drawio`](architecture-diagram.drawio) — เปิดด้วย [draw.io](https://app.diagrams.net/)
 
-เปิดไฟล์ `architecture-diagram.drawio` ด้วย [draw.io](https://app.diagrams.net/) เพื่อดู diagram
+```mermaid
+graph TB
+    subgraph Users
+        U["👤 Users"]
+    end
+
+    subgraph Frontend["☁️ Frontend (No Public IP)"]
+        CF["CloudFront CDN<br/>HTTPS Only"]
+        S3["S3 Bucket<br/>🔒 Block Public Access"]
+        CF -- "OAI" --> S3
+    end
+
+    subgraph Security["🛡️ Security Layer"]
+        WAF["AWS WAF<br/>Common Rules + Rate Limit"]
+    end
+
+    subgraph API["API Layer"]
+        APIGW["API Gateway<br/>REST API"]
+        COGAUTH["Cognito Authorizer<br/>JWT Validation"]
+        APIGW --> COGAUTH
+    end
+
+    subgraph AuthMS["Auth Microservice"]
+        AUTH_FN["🟠 Auth Lambda"]
+        COGNITO["Cognito<br/>User Pool"]
+        AUTH_FN --> COGNITO
+    end
+
+    subgraph MeetingMS["Meeting Microservice"]
+        MEET_FN["🟠 Meeting Lambda"]
+        DDB["DynamoDB<br/>🔐 KMS Encrypted"]
+        MEET_FN --> DDB
+    end
+
+    subgraph AIMS["AI Summarizer Microservice"]
+        AI_FN["🟠 AI Lambda"]
+        BEDROCK["Amazon Bedrock<br/>Claude Opus"]
+        AI_FN --> BEDROCK
+    end
+
+    subgraph EmailMS["Email Microservice"]
+        EMAIL_FN["🟠 Email Lambda"]
+        SES["Amazon SES"]
+        EMAIL_FN --> SES
+    end
+
+    subgraph Encryption["🔑 Encryption"]
+        KMS["AWS KMS<br/>Key Rotation Enabled"]
+    end
+
+    U -- "HTTPS" --> CF
+    CF -- "API Requests" --> WAF
+    WAF --> APIGW
+    APIGW -- "/auth/*" --> AUTH_FN
+    APIGW -- "/meetings/*" --> MEET_FN
+    APIGW -- "/ai/*" --> AI_FN
+    APIGW -- "/meetings/*/email" --> EMAIL_FN
+    KMS -. "Encryption" .-> DDB
+
+    style Frontend fill:#e8f4fd,stroke:#147EBA
+    style Security fill:#fde8e8,stroke:#DD3522
+    style AuthMS fill:#fff3e0,stroke:#FF9900
+    style MeetingMS fill:#fff3e0,stroke:#FF9900
+    style AIMS fill:#fff3e0,stroke:#FF9900
+    style EmailMS fill:#fff3e0,stroke:#FF9900
+    style Encryption fill:#fce4ec,stroke:#DD344C
+```
 
 ## Stack Structure
 

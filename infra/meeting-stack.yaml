@@ -1,0 +1,158 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Meeting Minutes AI - Meeting Microservice Stack (DynamoDB + Lambda)
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+  LambdaCodeBucket:
+    Type: String
+  LambdaCodeKey:
+    Type: String
+    Default: meeting/handler.zip
+
+Resources:
+  # KMS Key for DynamoDB Encryption
+  MeetingsKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for Meeting Minutes DynamoDB encryption
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRootAccount
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: '*'
+          - Sid: AllowLambdaUsage
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt MeetingLambdaRole.Arn
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey
+            Resource: '*'
+
+  MeetingsKmsKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub alias/meeting-minutes-${Environment}
+      TargetKeyId: !Ref MeetingsKmsKey
+
+  # DynamoDB Meetings Table
+  MeetingsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub meeting-minutes-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: meetingId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: meetingId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: userId-createdAt-index
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+        KMSMasterKeyId: !Ref MeetingsKmsKey
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      DeletionProtectionEnabled: true
+
+  # Meeting Lambda Execution Role
+  MeetingLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub meeting-minutes-meeting-role-${Environment}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt MeetingsTable.Arn
+                  - !Sub ${MeetingsTable.Arn}/index/*
+        - PolicyName: KmsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                  - kms:Encrypt
+                  - kms:GenerateDataKey
+                Resource: !GetAtt MeetingsKmsKey.Arn
+
+  # Meeting Lambda Function
+  MeetingLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub meeting-minutes-meeting-${Environment}
+      Runtime: nodejs20.x
+      Handler: handler.handler
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Role: !GetAtt MeetingLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          MEETINGS_TABLE: !Ref MeetingsTable
+          ENVIRONMENT: !Ref Environment
+      TracingConfig:
+        Mode: Active
+
+Outputs:
+  MeetingsTableName:
+    Value: !Ref MeetingsTable
+    Export:
+      Name: !Sub ${AWS::StackName}-MeetingsTableName
+  MeetingsTableArn:
+    Value: !GetAtt MeetingsTable.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-MeetingsTableArn
+  MeetingLambdaArn:
+    Value: !GetAtt MeetingLambdaFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-MeetingLambdaArn
+  MeetingsKmsKeyArn:
+    Value: !GetAtt MeetingsKmsKey.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-MeetingsKmsKeyArn

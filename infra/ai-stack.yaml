@@ -1,0 +1,91 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Meeting Minutes AI - AI Summarizer Microservice Stack (Lambda + Bedrock)
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+  LambdaCodeBucket:
+    Type: String
+  LambdaCodeKey:
+    Type: String
+    Default: ai/handler.zip
+  MeetingsTableName:
+    Type: String
+  MeetingsTableArn:
+    Type: String
+  MeetingsKmsKeyArn:
+    Type: String
+
+Resources:
+  # AI Lambda Execution Role
+  AiLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub meeting-minutes-ai-role-${Environment}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:ListFoundationModels
+                Resource: '*'
+        - PolicyName: DynamoDBReadWrite
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !Ref MeetingsTableArn
+        - PolicyName: KmsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:Encrypt
+                  - kms:GenerateDataKey
+                Resource: !Ref MeetingsKmsKeyArn
+
+  # AI Summarizer Lambda Function
+  AiLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub meeting-minutes-ai-${Environment}
+      Runtime: nodejs20.x
+      Handler: handler.handler
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Role: !GetAtt AiLambdaRole.Arn
+      Timeout: 120
+      MemorySize: 512
+      Environment:
+        Variables:
+          MEETINGS_TABLE: !Ref MeetingsTableName
+          DEFAULT_MODEL_ID: anthropic.claude-opus-4-0-20250514
+          ENVIRONMENT: !Ref Environment
+      TracingConfig:
+        Mode: Active
+
+Outputs:
+  AiLambdaArn:
+    Value: !GetAtt AiLambdaFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-AiLambdaArn

@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Meeting Minutes AI - Email Microservice Stack (Lambda + SES)
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+  LambdaCodeBucket:
+    Type: String
+  LambdaCodeKey:
+    Type: String
+    Default: email/handler.zip
+  MeetingsTableName:
+    Type: String
+  MeetingsTableArn:
+    Type: String
+  MeetingsKmsKeyArn:
+    Type: String
+  SenderEmail:
+    Type: String
+    Description: Verified SES sender email address
+
+Resources:
+  # Email Lambda Execution Role
+  EmailLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub meeting-minutes-email-role-${Environment}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SesAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    ses:FromAddress: !Ref SenderEmail
+        - PolicyName: DynamoDBReadWrite
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !Ref MeetingsTableArn
+        - PolicyName: KmsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:Encrypt
+                  - kms:GenerateDataKey
+                Resource: !Ref MeetingsKmsKeyArn
+
+  # Email Lambda Function
+  EmailLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub meeting-minutes-email-${Environment}
+      Runtime: nodejs20.x
+      Handler: handler.handler
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Ref LambdaCodeKey
+      Role: !GetAtt EmailLambdaRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          MEETINGS_TABLE: !Ref MeetingsTableName
+          SENDER_EMAIL: !Ref SenderEmail
+          ENVIRONMENT: !Ref Environment
+      TracingConfig:
+        Mode: Active
+
+Outputs:
+  EmailLambdaArn:
+    Value: !GetAtt EmailLambdaFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-EmailLambdaArn

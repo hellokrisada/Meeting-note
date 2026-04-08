@@ -102,7 +102,7 @@ Resources:
     Properties:
       FunctionName: !Sub meeting-minutes-auth-${Environment}
       Runtime: nodejs20.x
-      Handler: handler.handler
+      Handler: src/handler.handler
       Code:
         S3Bucket: !Ref LambdaCodeBucket
         S3Key: !Ref LambdaCodeKey

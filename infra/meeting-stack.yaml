@@ -28,16 +28,6 @@ Resources:
               AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
             Action: kms:*
             Resource: '*'
-          - Sid: AllowLambdaUsage
-            Effect: Allow
-            Principal:
-              AWS: !GetAtt MeetingLambdaRole.Arn
-            Action:
-              - kms:Decrypt
-              - kms:DescribeKey
-              - kms:Encrypt
-              - kms:GenerateDataKey
-            Resource: '*'
 
   MeetingsKmsKeyAlias:
     Type: AWS::KMS::Alias
@@ -76,7 +66,6 @@ Resources:
         KMSMasterKeyId: !Ref MeetingsKmsKey
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
-      DeletionProtectionEnabled: true
 
   # Meeting Lambda Execution Role
   MeetingLambdaRole:

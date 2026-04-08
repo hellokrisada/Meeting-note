@@ -155,49 +155,12 @@ npm run install-all
 # ตั้งค่าตัวแปร
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 LAMBDA_BUCKET=meeting-minutes-lambda-${ACCOUNT_ID}
+
+# Build และ upload ทุก service ด้วยคำสั่งเดียว
+./scripts/build-lambdas.sh $LAMBDA_BUCKET
 ```
 
-### 4.1 Build และ Upload แต่ละ Service
-
-**Auth Service:**
-```bash
-cd services/auth
-npm install
-npx tsc
-zip -r handler.zip src/ node_modules/ package.json
-aws s3 cp handler.zip s3://$LAMBDA_BUCKET/auth/handler.zip
-cd ../..
-```
-
-**Meeting Service:**
-```bash
-cd services/meeting
-npm install
-npx tsc
-zip -r handler.zip src/ node_modules/ package.json
-aws s3 cp handler.zip s3://$LAMBDA_BUCKET/meeting/handler.zip
-cd ../..
-```
-
-**AI Service:**
-```bash
-cd services/ai
-npm install
-npx tsc
-zip -r handler.zip src/ node_modules/ package.json
-aws s3 cp handler.zip s3://$LAMBDA_BUCKET/ai/handler.zip
-cd ../..
-```
-
-**Email Service:**
-```bash
-cd services/email
-npm install
-npx tsc
-zip -r handler.zip src/ node_modules/ package.json
-aws s3 cp handler.zip s3://$LAMBDA_BUCKET/email/handler.zip
-cd ../..
-```
+สคริปต์นี้จะ compile TypeScript และ upload zip ไปยัง S3 ให้ทั้ง 4 services อัตโนมัติ
 
 ---
 

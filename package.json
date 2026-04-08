@@ -22,7 +22,7 @@
     "jest": "^30.3.0",
     "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
-    "typescript": "~5.7.0"
+    "typescript": "5.7"
   },
   "description": "ระบบบันทึกรายงานการประชุมพร้อม AI สรุปการประชุม และส่งสรุปทางอีเมลอัตโนมัติ บน AWS Serverless Architecture",
   "main": "proxy-server.js",

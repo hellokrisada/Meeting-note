@@ -69,7 +69,7 @@ Resources:
     Properties:
       FunctionName: !Sub meeting-minutes-ai-${Environment}
       Runtime: nodejs20.x
-      Handler: src/handler.handler
+      Handler: services/ai/src/handler.handler
       Code:
         S3Bucket: !Ref LambdaCodeBucket
         S3Key: !Ref LambdaCodeKey

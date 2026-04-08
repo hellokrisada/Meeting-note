@@ -75,7 +75,7 @@ Resources:
     Properties:
       FunctionName: !Sub meeting-minutes-email-${Environment}
       Runtime: nodejs20.x
-      Handler: src/handler.handler
+      Handler: services/email/src/handler.handler
       Code:
         S3Bucket: !Ref LambdaCodeBucket
         S3Key: !Ref LambdaCodeKey

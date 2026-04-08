@@ -89,7 +89,7 @@ async function login(body: any, requestId: string) {
       })
     );
     return response(200, {
-      accessToken: result.AuthenticationResult?.AccessToken,
+      accessToken: result.AuthenticationResult?.IdToken,
       refreshToken: result.AuthenticationResult?.RefreshToken,
       expiresIn: result.AuthenticationResult?.ExpiresIn,
     });

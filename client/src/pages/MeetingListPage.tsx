@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { meetingApi, ApiError } from '../api';
 
 interface Participant {
@@ -16,6 +16,7 @@ interface MeetingRecord {
 }
 
 export default function MeetingListPage() {
+  const navigate = useNavigate();
   const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -53,9 +54,14 @@ export default function MeetingListPage() {
       <div className="meeting-list-box">
         <div className="meeting-list-header">
           <h2>รายการประชุม</h2>
-          <Link to="/meetings/new" className="btn-new-meeting">
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <Link to="/meetings/new" className="btn-new-meeting">
             + สร้างการประชุมใหม่
           </Link>
+            <button className="btn-logout" onClick={() => { localStorage.removeItem('accessToken'); localStorage.removeItem('refreshToken'); navigate('/login'); }}>
+              ออกจากระบบ
+            </button>
+          </div>
         </div>
 
         {loading && <p className="loading-text">กำลังโหลด...</p>}

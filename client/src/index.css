@@ -911,3 +911,18 @@ header h1 {
   background: #ccc;
   cursor: not-allowed;
 }
+
+.btn-logout {
+  padding: 10px 20px;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-logout:hover {
+  background: #c0392b;
+}

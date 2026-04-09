@@ -37,25 +37,44 @@ async function sleep(ms: number) {
 }
 
 async function invokeBedrockWithRetry(modelId: string, prompt: string, maxRetries = 3): Promise<string> {
+  const isAmazonModel = modelId.startsWith('amazon.');
+
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
+      let requestBody: string;
+      if (isAmazonModel) {
+        // Amazon Nova format
+        requestBody = JSON.stringify({
+          messages: [{ role: 'user', content: [{ text: prompt }] }],
+          inferenceConfig: { maxTokens: 4096 },
+        });
+      } else {
+        // Anthropic Claude format
+        requestBody = JSON.stringify({
+          anthropic_version: 'bedrock-2023-05-31',
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }],
+        });
+      }
+
       const result = await bedrock.send(
         new InvokeModelCommand({
           modelId,
           contentType: 'application/json',
           accept: 'application/json',
-          body: JSON.stringify({
-            anthropic_version: 'bedrock-2023-05-31',
-            max_tokens: 4096,
-            messages: [{ role: 'user', content: prompt }],
-          }),
+          body: requestBody,
         })
       );
       const responseBody = JSON.parse(new TextDecoder().decode(result.body));
-      return responseBody.content?.[0]?.text || '';
+
+      if (isAmazonModel) {
+        return responseBody.output?.message?.content?.[0]?.text || '';
+      } else {
+        return responseBody.content?.[0]?.text || '';
+      }
     } catch (err) {
       if (attempt < maxRetries - 1) {
-        await sleep(Math.pow(2, attempt) * 1000); // 1s, 2s, 4s
+        await sleep(Math.pow(2, attempt) * 1000);
         continue;
       }
       throw err;

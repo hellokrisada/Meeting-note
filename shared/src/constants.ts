@@ -1,15 +1,27 @@
 import { AIModel } from './types';
 
-export const DEFAULT_MODEL_ID = 'anthropic.claude-opus-4-0-20250514';
+export const DEFAULT_MODEL_ID = 'amazon.nova-lite-v1:0';
 
 export const MEETINGS_TABLE = process.env.MEETINGS_TABLE || 'meeting-minutes-dev';
 
 export const SUPPORTED_MODELS: AIModel[] = [
   {
-    modelId: 'anthropic.claude-opus-4-0-20250514',
-    displayName: 'Claude Opus',
-    provider: 'Anthropic',
+    modelId: 'amazon.nova-lite-v1:0',
+    displayName: 'Amazon Nova Lite',
+    provider: 'Amazon',
     isDefault: true,
+  },
+  {
+    modelId: 'amazon.nova-micro-v1:0',
+    displayName: 'Amazon Nova Micro',
+    provider: 'Amazon',
+    isDefault: false,
+  },
+  {
+    modelId: 'amazon.nova-pro-v1:0',
+    displayName: 'Amazon Nova Pro',
+    provider: 'Amazon',
+    isDefault: false,
   },
   {
     modelId: 'anthropic.claude-sonnet-4-20250514',
@@ -20,6 +32,12 @@ export const SUPPORTED_MODELS: AIModel[] = [
   {
     modelId: 'anthropic.claude-haiku-4-20250514',
     displayName: 'Claude Haiku',
+    provider: 'Anthropic',
+    isDefault: false,
+  },
+  {
+    modelId: 'anthropic.claude-opus-4-0-20250514',
+    displayName: 'Claude Opus',
     provider: 'Anthropic',
     isDefault: false,
   },

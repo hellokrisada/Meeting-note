@@ -6,11 +6,14 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ERROR_CODES, MEETINGS_TABLE, DEFAULT_MODEL_ID, SUPPORTED_MODELS } from '../../../shared/src/constants';
-import { ErrorResponse } from '../../../shared/src/types';
+import { ErrorResponse, MeetingRecord, EmailStatus } from '../../../shared/src/types';
 import { requireAuth } from '../../auth/src/middleware';
 
 const bedrock = new BedrockRuntimeClient({});
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const ses = new (require('@aws-sdk/client-ses').SESClient)({});
+const SendEmailCommand = require('@aws-sdk/client-ses').SendEmailCommand;
+const SENDER_EMAIL = process.env.SENDER_EMAIL || 'noreply@meeting-minutes.example.com';
 
 function response(statusCode: number, body: unknown): APIGatewayProxyResult {
   return {
@@ -148,10 +151,10 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
   if ('statusCode' in auth) return auth;
   const { userId } = auth;
 
-  // Extract meetingId from path like /meetings/{meetingId}/summarize or /meetings/{meetingId}/summary
-  const pathMatch = path.match(/\/meetings\/([^/]+)\/(summarize|summary)/);
-  const meetingId = pathMatch?.[1];
-  const action = pathMatch?.[2];
+  // Extract meetingId from path like /ai/summarize/{meetingId} or /ai/summary/{meetingId}
+  const pathMatch = path.match(/\/ai\/(summarize|summary|send-email|resend-email)\/([^/]+)/);
+  const action = pathMatch?.[1];
+  const meetingId = pathMatch?.[2];
 
   if (!meetingId) {
     return errorResponse(404, ERROR_CODES.NOT_FOUND, 'Route not found', requestId);
@@ -165,9 +168,53 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (method === 'PUT' && action === 'summary') {
       return await updateSummary(userId, meetingId, body, requestId);
     }
+    if (method === 'POST' && (action === 'send-email' || action === 'resend-email')) {
+      return await sendEmail(userId, meetingId, body, requestId);
+    }
     return errorResponse(404, ERROR_CODES.NOT_FOUND, 'Route not found', requestId);
   } catch (err: any) {
     console.error('Unhandled error:', err);
     return errorResponse(500, ERROR_CODES.INTERNAL_ERROR, 'Internal server error', requestId);
   }
 }
+function formatEmailBody(meeting: MeetingRecord): string {
+  const participantList = meeting.participants.map((p) => `  - ${p.name} (${p.email})`).join('\n');
+  return `สรุปการประชุม: ${meeting.topic}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n📋 สรุปจาก AI:\n${meeting.summary || 'ไม่มีสรุป'}\n\n👥 ผู้เข้าร่วมประชุม:\n${participantList}\n\n📌 Next Steps:\n${meeting.nextSteps || 'ไม่ระบุ'}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nส่งโดยระบบ Meeting Minutes AI`;
+}
+
+async function sendToParticipant(email: string, subject: string, body: string, maxRetries = 2): Promise<boolean> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      await ses.send(new SendEmailCommand({
+        Source: SENDER_EMAIL,
+        Destination: { ToAddresses: [email] },
+        Message: { Subject: { Data: subject, Charset: 'UTF-8' }, Body: { Text: { Data: body, Charset: 'UTF-8' } } },
+      }));
+      return true;
+    } catch (err) {
+      if (attempt < maxRetries - 1) { await sleep(Math.pow(2, attempt) * 1000); continue; }
+      console.error(`Failed to send email to ${email}:`, err);
+      return false;
+    }
+  }
+  return false;
+}
+
+async function sendEmail(userId: string, meetingId: string, body: any, requestId: string) {
+  const meeting = await ddb.send(new GetCommand({ TableName: MEETINGS_TABLE, Key: { meetingId } }));
+  if (!meeting.Item || meeting.Item.userId !== userId) return errorResponse(404, ERROR_CODES.NOT_FOUND, 'Meeting not found', requestId);
+  const record = meeting.Item as MeetingRecord;
+  if (!record.summary) return errorResponse(400, ERROR_CODES.VALIDATION_ERROR, 'Meeting has no summary. Please summarize first.', requestId);
+  const targetEmails = body.participantEmails || record.participants.map((p) => p.email);
+  const subject = `สรุปการประชุม: ${record.topic}`;
+  const emailBody = formatEmailBody(record);
+  const sent: string[] = []; const failed: string[] = [];
+  for (const email of targetEmails) { (await sendToParticipant(email, subject, emailBody)) ? sent.push(email) : failed.push(email); }
+  const emailStatus: EmailStatus = { sent, failed, lastSentAt: new Date().toISOString() };
+  await ddb.send(new UpdateCommand({ TableName: MEETINGS_TABLE, Key: { meetingId }, UpdateExpression: 'SET emailStatus = :status, updatedAt = :now', ExpressionAttributeValues: { ':status': emailStatus, ':now': new Date().toISOString() } }));
+  if (failed.length === targetEmails.length) return errorResponse(502, ERROR_CODES.EMAIL_SERVICE_ERROR, 'All emails failed to send', requestId);
+  if (failed.length > 0) return response(207, { sent, failed, message: 'Some emails failed to send' });
+  return response(200, { sent, failed, message: 'All emails sent successfully' });
+}
+
+

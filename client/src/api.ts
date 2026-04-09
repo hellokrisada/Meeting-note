@@ -183,7 +183,7 @@ interface AIModel {
 export const aiApi = {
   summarize: (meetingId: string, modelId?: string) =>
     apiRequest<{ summary: string; modelUsed: string }>(
-      `/meetings/${meetingId}/summarize`,
+      `/ai/summarize/${meetingId}`,
       { method: 'POST', body: modelId ? { modelId } : {} }
     ),
 
@@ -191,7 +191,7 @@ export const aiApi = {
     apiRequest<{ models: AIModel[]; defaultModel: string }>('/ai/models'),
 
   updateSummary: (meetingId: string, summary: string) =>
-    apiRequest<{ meeting: MeetingRecord }>(`/meetings/${meetingId}/summary`, {
+    apiRequest<{ meeting: MeetingRecord }>(`/ai/summary/${meetingId}`, {
       method: 'PUT',
       body: { summary },
     }),
@@ -202,13 +202,13 @@ export const aiApi = {
 export const emailApi = {
   send: (meetingId: string, participantEmails?: string[]) =>
     apiRequest<{ sent: string[]; failed: string[]; messageId: string }>(
-      `/meetings/${meetingId}/send-email`,
+      `/ai/send-email/${meetingId}`,
       { method: 'POST', body: participantEmails ? { participantEmails } : {} }
     ),
 
   resend: (meetingId: string, participantEmails: string[]) =>
     apiRequest<{ sent: string[]; failed: string[] }>(
-      `/meetings/${meetingId}/resend-email`,
+      `/ai/resend-email/${meetingId}`,
       { method: 'POST', body: { participantEmails } }
     ),
 };
